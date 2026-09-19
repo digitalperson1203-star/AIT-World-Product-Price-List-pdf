@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#0b1f31" />
+    <title>AIT Product Price List</title>
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="hero">
+      <div class="hero__brand">
+        <img class="hero__logo" src="assets/ait-world-automation-logo.png" alt="AIT World Automation" />
+        <p class="eyebrow">AIT World Automation</p>
+        <h1>Product price list</h1>
+        <p class="hero__lede">Browse the smart-touch switch catalog, select the products you need, and export a tailored PDF.</p>
+      </div>
+      <div class="hero__contact" aria-label="Contact AIT World Automation">
+        <span>Sales</span>
+        <a href="tel:+919979671516">+91 99796 71516</a>
+        <a href="mailto:sales@aitworld.co.in">sales@aitworld.co.in</a>
+        <a href="https://www.aitworld.co.in" target="_blank" rel="noreferrer">aitworld.co.in</a>
+      </div>
+    </header>
+
+    <main>
+      <section class="toolbar" aria-label="Catalog controls">
+        <div class="search-wrap">
+          <label class="sr-only" for="search">Search products</label>
+          <input id="search" type="search" placeholder="Search product name, module, or collection" autocomplete="off" />
+        </div>
+        <label class="select-wrap" for="collection-filter">
+          <span class="sr-only">Filter by collection</span>
+          <select id="collection-filter"></select>
+        </label>
+        <button class="button button--quiet" id="select-visible" type="button">Select visible</button>
+        <button class="button button--quiet" id="clear-selection" type="button">Clear</button>
+      </section>
+
+      <section class="selection-bar" aria-live="polite">
+        <div><strong id="selection-count">0 products selected</strong><span id="selection-value"></span></div>
+        <div class="selection-bar__actions">
+          <button class="button button--secondary" id="download-selected" type="button" disabled>Download selected PDF</button>
+          <button class="button button--primary" id="download-all" type="button">Download complete PDF</button>
+        </div>
+      </section>
+
+      <p class="catalog-summary" id="catalog-summary"></p>
+      <div id="catalog" class="catalog" aria-live="polite"></div>
+
+      <section class="terms" id="terms-section">
+        <h2>Price-list notes</h2>
+        <ul id="terms-list"></ul>
+      </section>
+    </main>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <script src="catalog-data.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>
