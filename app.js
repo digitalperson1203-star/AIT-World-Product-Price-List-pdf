@@ -191,6 +191,33 @@ function canvasImage(image) {
   }
 }
 
+async function getProductImageData(imagePath) {
+  if (!imagePath) return null;
+  // 1. Instant pre-optimized high-resolution white-canvas JPEG (100% offline & reliable)
+  if (window.PDF_IMAGES && window.PDF_IMAGES[imagePath]) {
+    return window.PDF_IMAGES[imagePath];
+  }
+  // 2. Fetch as Blob + FileReader (avoid canvas tainting on localhost/server)
+  try {
+    const res = await fetch(imagePath);
+    if (res.ok) {
+      const blob = await res.blob();
+      return await new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result);
+        reader.onerror = () => resolve(null);
+        reader.readAsDataURL(blob);
+      });
+    }
+  } catch (e) {}
+  // 3. Fallback: Image + Canvas
+  try {
+    const img = await loadImage(imagePath);
+    if (img) return canvasImage(img);
+  } catch (e) {}
+  return null;
+}
+
 function addWrapped(doc, text, x, y, width, size, options = {}) {
   doc.setFontSize(size);
   doc.setTextColor(...(options.color || [19, 35, 52]));
@@ -526,12 +553,9 @@ async function downloadPdf(items, filename, visitor = null) {
       doc.setFillColor(255, 255, 255);
       doc.roundedRect(page.margin, y, page.w - page.margin * 2, cardHeight - 3, 2, 2, 'FD');
       try {
-        const image = await loadImage(product.image);
-        if (image) {
-          const imgData = canvasImage(image);
-          if (imgData) {
-            doc.addImage(imgData, 'JPEG', page.margin + 3, y + 3, 42, 42, undefined, 'FAST');
-          }
+        const imgData = await getProductImageData(product.image);
+        if (imgData) {
+          doc.addImage(imgData, 'JPEG', page.margin + 3, y + 3, 42, 42, undefined, 'FAST');
         }
       } catch (imgErr) {
         console.warn('Image could not be embedded for', product.id, imgErr);
