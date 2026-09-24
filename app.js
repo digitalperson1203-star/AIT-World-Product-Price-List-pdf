@@ -201,8 +201,237 @@ function addWrapped(doc, text, x, y, width, size, options = {}) {
   return y + lines.length * (size * .45);
 }
 
-async function downloadPdf(items, filename) {
+function truncateText(doc, text, maxWidth, size) {
+  doc.setFontSize(size);
+  let str = String(text || '').trim().replace(/[^\x00-\x7F\u00A0-\u00FF\u20B9]/g, ' ');
+  if (doc.getTextWidth(str) <= maxWidth) return str;
+  while (str.length > 3 && doc.getTextWidth(str + '...') > maxWidth) {
+    str = str.slice(0, -1);
+  }
+  return str + '...';
+}
+
+/* Visitor Details Management */
+const visitorModalBackdrop = document.querySelector('#visitor-modal-backdrop');
+const visitorForm = document.querySelector('#visitor-form');
+const companyInput = document.querySelector('#visitor-company');
+const nameInput = document.querySelector('#visitor-name');
+const phoneInput = document.querySelector('#visitor-phone');
+const gstInput = document.querySelector('#visitor-gst');
+const rememberInput = document.querySelector('#remember-visitor');
+const modalCloseBtn = document.querySelector('#modal-close-btn');
+const modalCancelBtn = document.querySelector('#modal-cancel-btn');
+const visitorBadge = document.querySelector('#visitor-badge');
+const visitorBadgeText = document.querySelector('#visitor-badge-text');
+const visitorBadgeEdit = document.querySelector('#visitor-badge-edit');
+
+let currentVisitor = loadVisitorDetails();
+let pendingDownloadAction = null;
+
+function loadVisitorDetails() {
+  try {
+    const raw = localStorage.getItem('ait_visitor_details');
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object') return parsed;
+    }
+  } catch (err) {
+    console.warn('Could not read saved visitor details:', err);
+  }
+  return null;
+}
+
+function saveVisitorDetails(details, remember) {
+  currentVisitor = details;
+  if (remember) {
+    try {
+      localStorage.setItem('ait_visitor_details', JSON.stringify(details));
+    } catch (err) {
+      console.warn('Could not save to localStorage:', err);
+    }
+  } else {
+    try {
+      localStorage.removeItem('ait_visitor_details');
+    } catch (err) {}
+  }
+  updateVisitorBadge();
+}
+
+function updateVisitorBadge() {
+  if (isVisitorComplete(currentVisitor)) {
+    visitorBadge.hidden = false;
+    visitorBadgeText.textContent = `${currentVisitor.company} (${currentVisitor.name})`;
+  } else {
+    visitorBadge.hidden = true;
+    visitorBadgeText.textContent = '';
+  }
+}
+
+function isVisitorComplete(visitor) {
+  return Boolean(
+    visitor &&
+    typeof visitor.company === 'string' && visitor.company.trim().length >= 2 &&
+    typeof visitor.name === 'string' && visitor.name.trim().length >= 2 &&
+    typeof visitor.phone === 'string' && visitor.phone.trim().length >= 10 &&
+    typeof visitor.gst === 'string' && visitor.gst.trim().length >= 2
+  );
+}
+
+function clearFormErrors() {
+  [companyInput, nameInput, phoneInput, gstInput].forEach((input) => {
+    input.classList.remove('is-invalid');
+  });
+  ['error-company', 'error-name', 'error-phone', 'error-gst'].forEach((id) => {
+    const el = document.querySelector(`#${id}`);
+    if (el) el.textContent = '';
+  });
+}
+
+function openVisitorModal(callback = null) {
+  pendingDownloadAction = callback;
+  clearFormErrors();
+  if (currentVisitor) {
+    companyInput.value = currentVisitor.company || '';
+    nameInput.value = currentVisitor.name || '';
+    phoneInput.value = currentVisitor.phone || '';
+    gstInput.value = currentVisitor.gst || '';
+  }
+  visitorModalBackdrop.hidden = false;
+  document.body.style.overflow = 'hidden';
+  setTimeout(() => {
+    if (!companyInput.value) companyInput.focus();
+    else if (!nameInput.value) nameInput.focus();
+    else if (!phoneInput.value) phoneInput.focus();
+    else if (!gstInput.value) gstInput.focus();
+    else companyInput.focus();
+  }, 50);
+}
+
+function closeVisitorModal() {
+  visitorModalBackdrop.hidden = true;
+  document.body.style.overflow = '';
+  clearFormErrors();
+  pendingDownloadAction = null;
+}
+
+function validateVisitorForm() {
+  clearFormErrors();
+  let isValid = true;
+
+  const company = companyInput.value.trim();
+  const name = nameInput.value.trim();
+  const phone = phoneInput.value.trim();
+  const gst = gstInput.value.trim().toUpperCase();
+
+  // Validate Company / Firm Name
+  if (!company) {
+    document.querySelector('#error-company').textContent = 'Please enter your firm or company name.';
+    companyInput.classList.add('is-invalid');
+    isValid = false;
+  } else if (company.length < 2) {
+    document.querySelector('#error-company').textContent = 'Company name must be at least 2 characters.';
+    companyInput.classList.add('is-invalid');
+    isValid = false;
+  }
+
+  // Validate Visitor Name
+  if (!name) {
+    document.querySelector('#error-name').textContent = 'Please enter your name.';
+    nameInput.classList.add('is-invalid');
+    isValid = false;
+  } else if (name.length < 2) {
+    document.querySelector('#error-name').textContent = 'Visitor name must be at least 2 characters.';
+    nameInput.classList.add('is-invalid');
+    isValid = false;
+  }
+
+  // Validate Mobile Number
+  const cleanPhone = phone.replace(/[\s\-\(\)]/g, '');
+  const isPhoneValid = /^(\+91|0)?[6-9]\d{9}$/.test(cleanPhone) || /^\d{10,13}$/.test(cleanPhone);
+  if (!phone) {
+    document.querySelector('#error-phone').textContent = 'Please enter your mobile number.';
+    phoneInput.classList.add('is-invalid');
+    isValid = false;
+  } else if (!isPhoneValid) {
+    document.querySelector('#error-phone').textContent = 'Please enter a valid 10-digit mobile number.';
+    phoneInput.classList.add('is-invalid');
+    isValid = false;
+  }
+
+  // Validate GST Number
+  // Allows valid 15-char GSTIN or 'NA' / 'N/A' for unregistered entities
+  const cleanGst = gst.replace(/\s+/g, '');
+  const isGstValid = /^(NA|N\/A|URP|[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}[Zz][0-9A-Z]{1})$/i.test(cleanGst) || /^[0-9A-Z]{15}$/.test(cleanGst);
+  if (!gst) {
+    document.querySelector('#error-gst').textContent = 'Please enter GST number (or NA if not registered).';
+    gstInput.classList.add('is-invalid');
+    isValid = false;
+  } else if (!isGstValid) {
+    document.querySelector('#error-gst').textContent = 'Enter a valid 15-digit GSTIN (e.g. 24AAAAA0000A1Z5) or NA.';
+    gstInput.classList.add('is-invalid');
+    isValid = false;
+  }
+
+  if (!isValid) return null;
+
+  return {
+    company,
+    name,
+    phone: cleanPhone,
+    gst: cleanGst.toUpperCase()
+  };
+}
+
+// Clear error state on input
+[companyInput, nameInput, phoneInput, gstInput].forEach((input) => {
+  input.addEventListener('input', () => {
+    input.classList.remove('is-invalid');
+    const fieldId = input.id.replace('visitor-', '');
+    const err = document.querySelector(`#error-${fieldId}`);
+    if (err) err.textContent = '';
+  });
+});
+
+gstInput.addEventListener('input', () => {
+  gstInput.value = gstInput.value.toUpperCase();
+});
+
+visitorForm.addEventListener('submit', (e) => {
+  e.preventDefault();
+  const validated = validateVisitorForm();
+  if (!validated) return;
+
+  saveVisitorDetails(validated, rememberInput.checked);
+  const actionToRun = pendingDownloadAction;
+  closeVisitorModal();
+  notify(`Welcome, ${validated.name}! Generating your customized price list...`);
+
+  if (typeof actionToRun === 'function') {
+    actionToRun(validated);
+  }
+});
+
+modalCloseBtn.addEventListener('click', closeVisitorModal);
+modalCancelBtn.addEventListener('click', closeVisitorModal);
+visitorModalBackdrop.addEventListener('click', (e) => {
+  if (e.target === visitorModalBackdrop) closeVisitorModal();
+});
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && !visitorModalBackdrop.hidden) closeVisitorModal();
+});
+
+visitorBadgeEdit.addEventListener('click', () => {
+  openVisitorModal();
+});
+
+async function downloadPdf(items, filename, visitor = null) {
   if (!items || !items.length) return;
+  const clientInfo = visitor || currentVisitor;
+  if (!isVisitorComplete(clientInfo)) {
+    openVisitorModal((validated) => downloadPdf(items, filename, validated));
+    return;
+  }
+
   const oldText = allDownload.textContent;
   allDownload.disabled = true;
   selectedDownload.disabled = true;
@@ -211,29 +440,87 @@ async function downloadPdf(items, filename) {
     const doc = new JsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4', compress: true });
     const page = { w: 210, h: 297, margin: 14 };
     let y = 18;
-    const startPage = () => {
+    const todayFormatted = new Intl.DateTimeFormat('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }).format(new Date());
+
+    const startPage = (pageNum = 1) => {
       doc.setFillColor(11, 31, 49);
       doc.rect(0, 0, page.w, 12, 'F');
       doc.setTextColor(255, 255, 255);
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(8);
-      doc.text('AIT WORLD AUTOMATION  -  PRODUCT PRICE LIST', page.margin, 7.8);
-      y = 20;
+      
+      const leftHeader = 'AIT WORLD AUTOMATION  -  PRODUCT PRICE LIST';
+      const rightHeader = pageNum === 1 ? `DATE: ${todayFormatted}` : truncateText(doc, `CLIENT: ${clientInfo.company}`, 90, 8);
+      doc.text(leftHeader, page.margin, 7.8);
+      doc.text(rightHeader, page.w - page.margin, 7.8, { align: 'right' });
+      y = 19;
     };
-    startPage();
-    doc.setFontSize(21);
+
+    // First page top banner
+    startPage(1);
+
+    // Title row
+    doc.setFontSize(18);
     doc.setTextColor(11, 31, 49);
-    doc.text('Selected product price list', page.margin, y + 7);
-    doc.setFontSize(9);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Product Price List & Quotation', page.margin, y + 5);
+
+    doc.setFontSize(8.5);
     doc.setTextColor(88, 107, 123);
-    doc.text(`${items.length} products  |  Sales: +91 99796 71516  |  sales@aitworld.co.in`, page.margin, y + 14);
-    y += 22;
+    doc.setFont('helvetica', 'normal');
+    doc.text(`${items.length} Product${items.length === 1 ? '' : 's'}  ·  Sales: +91 99796 71516  ·  sales@aitworld.co.in  ·  aitworld.co.in`, page.margin, y + 11.5);
+    y += 16;
+
+    // Client / Visitor details quotation header card
+    const boxW = page.w - page.margin * 2;
+    const boxH = 26;
+    doc.setFillColor(244, 248, 250);
+    doc.setDrawColor(204, 218, 228);
+    doc.roundedRect(page.margin, y, boxW, boxH, 2, 2, 'FD');
+
+    // Teal accent bar on the left
+    doc.setFillColor(0, 169, 143);
+    doc.rect(page.margin, y, 2.5, boxH, 'F');
+
+    // Header badge
+    doc.setFontSize(7.5);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(0, 125, 112);
+    doc.text('CLIENT / VISITOR QUOTATION DETAILS', page.margin + 6, y + 5.5);
+
+    // Left column: Company & Visitor Name
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(97, 113, 129);
+    doc.text('Firm / Company:', page.margin + 6, y + 12);
+    doc.text('Visitor Name:', page.margin + 6, y + 19);
+
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(11, 31, 49);
+    doc.text(truncateText(doc, clientInfo.company, 75, 8.5), page.margin + 32, y + 12);
+    doc.text(truncateText(doc, clientInfo.name, 75, 8.5), page.margin + 32, y + 19);
+
+    // Right column: Mobile, GST, Date
+    const rightColX = page.margin + 105;
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(97, 113, 129);
+    doc.text('Mobile Number:', rightColX, y + 12);
+    doc.text('GST Number:', rightColX, y + 19);
+
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(11, 31, 49);
+    doc.text(truncateText(doc, clientInfo.phone, 55, 8.5), rightColX + 24, y + 12);
+    doc.text(truncateText(doc, clientInfo.gst, 55, 8.5), rightColX + 24, y + 19);
+
+    y += boxH + 6;
+
+    // Render product cards
     for (let index = 0; index < items.length; index += 1) {
       const product = items[index];
       const cardHeight = 55;
       if (y + cardHeight > page.h - 14) {
         doc.addPage();
-        startPage();
+        startPage(doc.getNumberOfPages());
       }
       doc.setDrawColor(220, 228, 234);
       doc.setFillColor(255, 255, 255);
@@ -265,15 +552,16 @@ async function downloadPdf(items, filename) {
         selectedDownload.textContent = `Preparing ${index + 1}/${items.length}`;
       }
     }
+
     const pages = doc.getNumberOfPages();
     for (let pageNo = 1; pageNo <= pages; pageNo += 1) {
       doc.setPage(pageNo);
       doc.setTextColor(97, 113, 129);
       doc.setFontSize(7);
-      doc.text(`Page ${pageNo} of ${pages}  -  Prices are taken from the supplied price list. Taxes and duties are extra where applicable.`, page.margin, 291);
+      doc.text(`Page ${pageNo} of ${pages}  -  Prepared for ${truncateText(doc, clientInfo.company, 60, 7)} (${truncateText(doc, clientInfo.name, 40, 7)})  -  Prices taken from supplied price list. Taxes & duties extra.`, page.margin, 291);
     }
     doc.save(filename);
-    notify(`Your PDF with ${items.length} products has been downloaded.`);
+    notify(`PDF generated for ${clientInfo.name} (${items.length} products). Download started!`);
   } catch (error) {
     console.error('PDF export error:', error);
     notify(error.message || 'An error occurred while generating the PDF.');
@@ -285,15 +573,38 @@ async function downloadPdf(items, filename) {
   }
 }
 
+function handleDownloadRequest(items, filename) {
+  if (!items || !items.length) {
+    notify('Please select at least one product to download.');
+    return;
+  }
+  if (isVisitorComplete(currentVisitor)) {
+    downloadPdf(items, filename, currentVisitor);
+  } else {
+    openVisitorModal((validated) => {
+      downloadPdf(items, filename, validated);
+    });
+  }
+}
+
 function renderTerms() {
   const uniqueTerms = [...new Set(CATALOG_DATA.terms)];
   document.querySelector('#terms-list').innerHTML = uniqueTerms.map((term) => `<li>${term}</li>`).join('');
 }
 
-selectedDownload.addEventListener('click', () => downloadPdf([...selections].map(productById).filter(Boolean), 'ait-selected-products.pdf'));
-allDownload.addEventListener('click', () => downloadPdf(products, 'ait-complete-price-list.pdf'));
+selectedDownload.addEventListener('click', () => {
+  const selectedItems = [...selections].map(productById).filter(Boolean);
+  handleDownloadRequest(selectedItems, 'ait-selected-products.pdf');
+});
+
+allDownload.addEventListener('click', () => {
+  handleDownloadRequest(products, 'ait-complete-price-list.pdf');
+});
+
 setupFilters();
 renderTerms();
 renderCatalog();
 updateSelection();
+updateVisitorBadge();
+
 
