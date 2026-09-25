@@ -108,6 +108,91 @@
       </div>
     </div>
 
+    <!-- Product Preview Modal -->
+    <div class="modal-backdrop" id="preview-modal-backdrop" hidden>
+      <div class="modal modal--preview" id="preview-modal" role="dialog" aria-modal="true" aria-labelledby="preview-modal-title">
+        <button class="modal__close" id="preview-close-btn" type="button" aria-label="Close product preview">&times;</button>
+        <div class="preview-layout">
+          <!-- Left: Product Image & Badges -->
+          <div class="preview-gallery">
+            <div class="preview-gallery__image-wrap">
+              <img id="preview-image" src="" alt="Product preview" />
+            </div>
+            <div class="preview-gallery__badges">
+              <span class="preview-badge preview-badge--collection" id="preview-badge-collection"></span>
+              <span class="preview-badge preview-badge--tech" id="preview-badge-tech" hidden></span>
+            </div>
+          </div>
+
+          <!-- Right: Details & Selection Controls -->
+          <div class="preview-info">
+            <div class="preview-meta">
+              <span class="collection-tag" id="preview-collection"></span>
+              <span id="preview-item-number"></span>
+            </div>
+            <h2 id="preview-modal-title" class="preview-title"></h2>
+
+            <div class="preview-specs-grid">
+              <div class="spec-item">
+                <span class="spec-label">Model Number</span>
+                <strong class="spec-value" id="preview-model">—</strong>
+              </div>
+              <div class="spec-item">
+                <span class="spec-label">Module / Spec</span>
+                <strong class="spec-value" id="preview-module">—</strong>
+              </div>
+              <div class="spec-item" id="preview-spec-tech-wrap">
+                <span class="spec-label">Technology</span>
+                <strong class="spec-value" id="preview-tech">—</strong>
+              </div>
+              <div class="spec-item" id="preview-spec-page-wrap">
+                <span class="spec-label">Catalog Page</span>
+                <strong class="spec-value" id="preview-page">—</strong>
+              </div>
+            </div>
+
+            <!-- Price Breakdown Section -->
+            <div class="preview-pricing" id="preview-pricing"></div>
+
+            <!-- Switch Panel Color Selector (Only where applicable) -->
+            <div class="preview-color-section" id="preview-color-section" hidden>
+              <div class="color-section-header">
+                <span class="control-label">Select Color:</span>
+                <span class="selected-color-name" id="preview-color-name">White</span>
+              </div>
+              <div class="color-swatches" id="preview-color-swatches" role="radiogroup" aria-label="Switch panel color options">
+                <!-- 6 Circular Swatches rendered here -->
+              </div>
+            </div>
+
+            <!-- Quantity Selector & Dynamic Line Total -->
+            <div class="preview-qty-section">
+              <div class="qty-section-left">
+                <label class="control-label" for="preview-qty-input">Quantity:</label>
+                <div class="qty-control qty-control--lg" role="group" aria-label="Product quantity selector">
+                  <button type="button" class="qty-btn" id="preview-qty-decrement" aria-label="Decrease quantity" title="Decrease quantity">−</button>
+                  <input type="number" id="preview-qty-input" class="qty-input" value="1" min="1" step="1" inputmode="numeric" aria-label="Quantity" />
+                  <button type="button" class="qty-btn" id="preview-qty-increment" aria-label="Increase quantity" title="Increase quantity">+</button>
+                </div>
+              </div>
+              <div class="preview-line-total" id="preview-line-total-wrap">
+                <span class="line-total-label">Selected Total</span>
+                <strong class="line-total-value" id="preview-line-total">₹0</strong>
+              </div>
+            </div>
+
+            <!-- Modal Action Buttons -->
+            <div class="preview-actions">
+              <button type="button" class="button button--quiet" id="preview-cancel-btn">Cancel</button>
+              <button type="button" class="button button--primary" id="preview-action-btn">
+                Add to quotation
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
     <script src="assets/vendor/jspdf.umd.min.js"></script>
     <script src="assets/pdf-images-data.js"></script>
